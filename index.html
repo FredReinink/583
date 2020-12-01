@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<!--
+
+Fred Reinink
+Dec 1 2020
+CPSC 583
+
+Hash table implementation (unmodified) taken from: http://www.mojavelinux.com/articles/javascript_hashes.html
+License: https://creativecommons.org/licenses/by-sa/3.0/
+
+D3 force directed graph implementation modified from/inspired by three different sources, all licensed under: https://opensource.org/licenses/GPL-3.0
+https://bl.ocks.org/mbostock/3750558 Dec 1 2020
+http://bl.ocks.org/jhb/5955887 Dec 1 2020
+http://bl.ocks.org/fancellu/2c782394602a93921faff74e594d1bb1 Dec 1 2020
+
+Therefore this project is also licensed under https://opensource.org/licenses/GPL-3.0
+
+-->
+<meta charset="utf-8">
+<body>
+
+<script src="https://d3js.org/d3.v3.min.js"></script>
+<script type="text/javascript">
+	function HashTable(obj)
+	{
+		this.length = 0;
+		this.items = {};
+		for (var p in obj) {
+			if (obj.hasOwnProperty(p)) {
+				this.items[p] = obj[p];
+				this.length++;
+			}
+		}
+
+		this.setItem = function(key, value)
+		{
+			var previous = undefined;
+			if (this.hasItem(key)) {
+				previous = this.items[key];
+			}
+			else {
+				this.length++;
+			}
+			this.items[key] = value;
+			return previous;
+		}
+
+		this.getItem = function(key) {
+			return this.hasItem(key) ? this.items[key] : undefined;
+		}
+
+		this.hasItem = function(key)
+		{
+			return this.items.hasOwnProperty(key);
+		}
+
+		this.removeItem = function(key)
+		{
+			if (this.hasItem(key)) {
+				previous = this.items[key];
+				this.length--;
+				delete this.items[key];
+				return previous;
+			}
+			else {
+				return undefined;
+			}
+		}
+
+		this.keys = function()
+		{
+			var keys = [];
+			for (var k in this.items) {
+				if (this.hasItem(k)) {
+					keys.push(k);
+				}
+			}
+			return keys;
+		}
+
+		this.values = function()
+		{
+			var values = [];
+			for (var k in this.items) {
+				if (this.hasItem(k)) {
+					values.push(this.items[k]);
+				}
+			}
+			return values;
+		}
+
+		this.each = function(fn) {
+			for (var k in this.items) {
+				if (this.hasItem(k)) {
+					fn(k, this.items[k]);
+				}
+			}
+		}
+
+		this.clear = function()
+		{
+			this.items = {}
+			this.length = 0;
+		}
+	}
+
+	var color = d3.scale.linear().domain([-1,20]).range(["white", "blue"])
+
+    d3.csv("data3.csv", function(data) {
+
+		var vertexTable = new HashTable(); // (k,v): k = name, v = i
+		var maxWinsTable = new HashTable(); // (k,v): k = name, v = max wins
+		var winsTable = new HashTable(); // (k,v): k = vertexTable["name"], v = [[index of edge, vertexTable["name of opponent"]], ...]
+		var lossesTable = new HashTable(); // (k,v): k = vertexTable["name"], v = [[index of edge, vertexTable["name of opponent"]], ...]
+
+		var i = 0;
+		data.forEach(d => {
+			d["i"] = i;
+			if (vertexTable.getItem(d["R_fighter"]) == undefined) {
+				vertexTable.setItem(d["R_fighter"], i);
+				maxWinsTable.setItem(d["R_fighter"], parseInt(d["R_wins"]));
+				i++;
+			} else {
+				if (maxWinsTable.getItem(d["R_fighter"]) < parseInt(d["R_wins"])) {
+					maxWinsTable.setItem(d["R_fighter"], parseInt(d["R_wins"]))
+				}
+			}
+			if (vertexTable.getItem(d["B_fighter"]) == undefined) {
+				vertexTable.setItem(d["B_fighter"], i);
+				maxWinsTable.setItem(d["B_fighter"], parseInt(d["B_wins"]));
+				i++;
+			} else {
+				if (maxWinsTable.getItem(d["B_fighter"]) < parseInt(d["B_wins"])) {
+					maxWinsTable.setItem(d["B_fighter"], parseInt(d["B_wins"]))
+				}
+			}
+		});
+
+		var vertices = [];
+
+		vertexTable.each(function(d,i) {
+			vertices[i] = {name: d}
+		});
+
+		var links = [];
+		i = 0;
+		data.forEach(d => {
+			if (d["Winner"] == "Red") {
+				links[i] = {source: vertexTable.getItem(d["R_fighter"]), target: vertexTable.getItem(d["B_fighter"]), date: d["date"]};
+
+				if (winsTable.getItem(vertexTable.getItem(d["R_fighter"])) == undefined) {
+					winsTable.setItem(vertexTable.getItem(d["R_fighter"]), [[i, vertexTable.getItem(d["B_fighter"])]]);
+				} else {
+					var prev = winsTable.getItem(vertexTable.getItem(d["R_fighter"]));
+					prev.push([i, vertexTable.getItem(d["B_fighter"])])
+					winsTable.setItem(vertexTable.getItem(d["R_fighter"]), prev);
+				}
+
+				if (lossesTable.getItem(vertexTable.getItem(d["B_fighter"])) == undefined) {
+					lossesTable.setItem(vertexTable.getItem(d["B_fighter"]), [[i, vertexTable.getItem(d["R_fighter"])]]);
+				} else {
+					var prev = lossesTable.getItem(vertexTable.getItem(d["B_fighter"]));
+					prev.push([i, vertexTable.getItem(d["R_fighter"])]);
+					lossesTable.setItem(vertexTable.getItem(d["B_fighter"]), prev);
+				}
+
+				i++;
+			} else if ((d["Winner"] == "Blue")) {
+				links[i] = {source: vertexTable.getItem(d["B_fighter"]), target: vertexTable.getItem(d["R_fighter"]), date: d["date"]};
+
+				if (winsTable.getItem(vertexTable.getItem(d["B_fighter"])) == undefined) {
+					winsTable.setItem(vertexTable.getItem(d["B_fighter"]), [[i, vertexTable.getItem(d["R_fighter"])]]);
+				} else {
+					var prev =  winsTable.getItem(vertexTable.getItem(d["B_fighter"]));
+					prev.push([i, vertexTable.getItem(d["R_fighter"])]);
+					winsTable.setItem(vertexTable.getItem(d["B_fighter"]), prev);
+				}
+
+				if (lossesTable.getItem(vertexTable.getItem(d["R_fighter"])) == undefined) {
+					lossesTable.setItem(vertexTable.getItem(d["R_fighter"]), [[i, vertexTable.getItem(d["B_fighter"])]]);
+				} else {
+					var prev = lossesTable.getItem(vertexTable.getItem(d["R_fighter"]));
+					prev.push([i, vertexTable.getItem(d["B_fighter"])]);
+					lossesTable.setItem(vertexTable.getItem(d["R_fighter"]), prev);
+				}
+
+				i++;
+			}
+		});
+
+		var svg = d3.select("body")
+			.append("svg")
+			.attr({"width":6000, "height":3600});
+
+		// Draw legend
+		svg.append("ellipse").attr("cx",200).attr("cy",200).attr("ry", 55).attr("rx",55).style("fill", color(0))
+		svg.append("text").attr("x", 300).attr("y", 200).text("0 total wins").style("font-size", "42px").attr("alignment-baseline","middle")
+		svg.append("ellipse").attr("cx",200).attr("cy",350).attr("ry", 55).attr("rx", 55).style("fill", color(20))
+		svg.append("text").attr("x", 300).attr("y", 350).text("20 total wins").style("font-size", "42px").attr("alignment-baseline","middle")
+
+		svg.append("ellipse").attr("cx",200).attr("cy",500).attr("rx", 55).attr("ry", 55).style("fill", "#FFFF00")
+		svg.append("text").attr("x", 185).attr("y", 500).text("A").style("font-size", "50px").attr("alignment-baseline","middle")
+		svg.append("ellipse").attr("cx",350).attr("cy",500).attr("rx", 55).attr("ry", 55).style("fill", "#008000")
+		svg.append("text").attr("x", 335).attr("y", 500).text("B").style("font-size", "50px").attr("alignment-baseline","middle")
+		svg.append("text").attr("x", 450).attr("y", 500).text("A has a win over B").style("font-size", "42px").attr("alignment-baseline","middle")
+
+		svg.append("ellipse").attr("cx",200).attr("cy",650).attr("rx", 55).attr("ry", 55).style("fill", "#FFFF00")
+		svg.append("text").attr("x", 185).attr("y", 650).text("A").style("font-size", "50px").attr("alignment-baseline","middle")
+		svg.append("ellipse").attr("cx",350).attr("cy",650).attr("rx", 55).attr("ry", 55).style("fill", "#FF0000")
+		svg.append("text").attr("x", 335).attr("y", 650).text("B").style("font-size", "50px").attr("alignment-baseline","middle")
+		svg.append("text").attr("x", 450).attr("y", 650).text("A has a loss to B").style("font-size", "42px").attr("alignment-baseline","middle")
+
+
+		var simulation = d3.layout.force()
+			.nodes(vertices)
+			.links(links)
+			.size([6000,3600])
+			.charge([-1500])
+			.linkDistance(200)
+			.start();
+
+		var edges = svg.selectAll("line")
+			.data(links)
+			.enter()
+			.append("line")
+			.style("stroke", "#C0C0C0")
+			.attr("id", function(d, i) { return "edge" + i })
+
+		var drag = simulation.drag()
+			.on("dragstart", dragStart);
+
+		var nodes = svg.selectAll("circle")
+			.data(vertices)
+			.enter()
+			.append("circle")
+			.style("fill", scaledColor)
+			.attr({"r":16})
+			.attr("id", function(d, i) { return "vertex" + vertexTable.getItem([d.name]) })
+			.on("dblclick", doubleClick)
+			.call(drag)
+
+		var nodeLabels = svg.selectAll(".nodelabel")
+			.data(vertices)
+			.enter()
+			.append("text")
+			.style("stroke", "#808080")
+			.attr("class", "nodelabel")
+			.attr("x", function(d) { return d.x; })
+			.attr("y", function(d) { return d.y; })
+			.attr("dy", -16)
+			.attr("dx", -40)
+			.text(function(d) { return d.name; });
+
+		var edgePaths = svg.selectAll(".edgepath")
+			.data(links)
+			.enter()
+			.append("path")
+			.attr("class","edgepath")
+			.attr("id", function(d, i) { return "edgepath" + i })
+
+		var edgeLabels = svg.selectAll(".edgelabel")
+			.data(links)
+			.enter()
+			.append("text")
+			.style("fill", "#808080")
+			.attr("class", "edgelabel")
+			.attr("id", function(d, i) { return "edgelabel" + i })
+			.attr("font-size", 12);
+
+		edgeLabels.append("textPath")
+			.style("text-anchor", "middle")
+			.attr("xlink:href", function(d, i) { return "#edgepath" + i })
+			.attr("startOffset", "50%")
+			.text(function(d) { return d["date"] });
+
+		simulation.on("tick", ticked);
+
+		function ticked() {
+			edges.attr("x1", function(d) { return d.source.x; })
+				.attr("y1", function(d) { return d.source.y; })
+				.attr("x2", function(d) { return d.target.x; })
+				.attr("y2", function(d) { return d.target.y; });
+
+			nodes.attr("cx", function(d) { return d.x; })
+				.attr("cy", function(d) { return d.y; });
+
+			edgePaths.attr("d", function(d) { return "M " + d.source.x + " " + d.source.y + " L " + d.target.x + " " + d.target.y; });
+
+			edgeLabels.attr("transform", function(d) {
+				if (d.target.x < d.source.x){
+					var bbox = this.getBBox();
+
+					rx = bbox.x + bbox.width / 2;
+					ry = bbox.y + bbox.height / 2;
+					return "rotate(180 " + rx + " " + ry + ")";
+				}
+				else {
+					return "rotate(0)";
+				}
+			});
+
+			nodeLabels
+				.attr("x", function(d) { return d.x; })
+				.attr("y", function(d) { return d.y; });
+		}
+
+		function scaledColor(d) {
+			return color(maxWinsTable.getItem([d.name]));
+		}
+
+		function dragStart(d) {
+			svg.selectAll("circle")
+				.style("fill", scaledColor)
+
+			svg.selectAll("line")
+				.style("stroke","#C0C0C0")
+
+			d3.select(this)
+				.classed("fixed", d.fixed = true)
+				.style("fill", "#FFFF00");
+
+			if (winsTable.getItem(d.index) != undefined) {
+				winsTable.getItem(d.index).forEach(w => {
+					svg.select("#edge" + w[0])
+						.style("stroke","#008000")
+
+					svg.select("#vertex" + w[1])
+						.style("fill", "#008000");
+				});
+			}
+
+			if (lossesTable.getItem(d.index) != undefined) {
+				lossesTable.getItem(d.index).forEach(l => {
+					svg.select("#edge" + l[0])
+						.style("stroke","#FF0000")
+
+					svg.select("#vertex" + l[1])
+						.style("fill", "#FF0000");
+				});
+			}
+		}
+
+		function doubleClick(d) {
+			svg.selectAll("circle")
+				.style("fill", scaledColor)
+
+			svg.selectAll("line")
+				.style("stroke","#C0C0C0")
+		}
+	});
+
+</script>
+</body>
